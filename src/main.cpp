@@ -17,7 +17,7 @@ const int in2 = 19;
 const int enA = 23;
 
 // MQTT Broker settings
-const char* mqtt_server = "192.168.86.25";
+const char* mqtt_server = "192.168.86.36";
 const int mqtt_port = 1883;
 
 WiFiClient espClient;
@@ -35,6 +35,33 @@ void reconnect() {
         }
     }
 }
+String parseActionFromJson(const String& json);
+
+String parseActionFromJson(const String& json){
+  const String key = "\"action\"";
+  int keyPos = json.indexOf(key);
+  if (keyPos < 0) {
+    return "";
+  }
+
+  int colonPos = json.indexOf(':', keyPos + key.length());
+  if (colonPos < 0) {
+    return "";
+  }
+
+  int quoteStart = json.indexOf('"', colonPos + 1);
+  if (quoteStart < 0) {
+    return "";
+  }
+
+  int quoteEnd = json.indexOf('"', quoteStart + 1);
+  if (quoteEnd < 0) {
+    return "";
+  }
+
+  return json.substring(quoteStart + 1, quoteEnd);
+}
+
 
 void callback(char* topic, byte* payload, unsigned int length) {
     // Handle incoming message
@@ -45,16 +72,54 @@ void callback(char* topic, byte* payload, unsigned int length) {
         Serial.print((char)payload[i]);
     }
     Serial.println();
+    if(strcmp(topic, "window/control") == 0){
+      String command = "";
+      for (unsigned int i = 0; i < length; i++) {
+        command += (char)payload[i];
+      }
+      String action = parseActionFromJson(command);
+      Serial.print("Received command: ");
+      Serial.println(command);
+      Serial.print("Parsed action: ");
+      Serial.println(action);
+      if(action == "open"){
+        analogWrite(enA, 255); // 0-255 where 255 is max speed
+        // Move actuator forward
+        digitalWrite(in1, HIGH);
+        digitalWrite(in2, LOW);
+        delay(2000); // Move for 3 seconds
+
+        // Stop
+        digitalWrite(in1, LOW);
+        digitalWrite(in2, LOW);
+      } else if(action == "close"){
+          analogWrite(enA, 255); // 0-255 where 255 is max speed
+        // Move actuator backward
+        digitalWrite(in1, LOW);
+        digitalWrite(in2, HIGH);
+        delay(2000);
+
+        // Stop
+        digitalWrite(in1, LOW);
+        digitalWrite(in2, LOW);
+      } else if(action == "stop"){
+        // Stop
+        digitalWrite(in1, LOW);
+        digitalWrite(in2, LOW);
+      }
+    }
 }
 
 // Forward declaration
 void actuatorSetup();
+
 
 void actuatorSetup(){
 
   pinMode(ledPin, OUTPUT);
 
 }
+
 
 void runActuatorForTest();
 
@@ -111,7 +176,7 @@ for(int i=0; i<2; i++){
 void loop() {
   // put your main code here, to run repeatedly:
   delay(1000);
-  Serial.println("Tick");
+  //Serial.println("Tick");
   wifiService.loop();
 
   if (digitalRead(RESET_BUTTON_PIN) == LOW) {
