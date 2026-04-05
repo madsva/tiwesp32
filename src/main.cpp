@@ -3,6 +3,7 @@
 #include <WiFiManager.h>
 #include "WifiService.h"
 #include <PubSubClient.h>
+#include <DHT.h>
 
 WiFiManager wm;
 WifiService wifiService;
@@ -16,8 +17,15 @@ const int in1 = 18;
 const int in2 = 19;
 const int enA = 23;
 
+// DHT22 sensor settings
+static constexpr int DHT_PIN = 4;
+static constexpr int DHT_TYPE = DHT22;
+static constexpr unsigned long DHT_READ_INTERVAL_MS = 2000;
+DHT dht(DHT_PIN, DHT_TYPE);
+unsigned long lastDhtReadMs = 0;
+
 // MQTT Broker settings
-const char* mqtt_server = "192.168.86.36";
+const char* mqtt_server = "192.168.86.42";
 const int mqtt_port = 1883;
 
 WiFiClient espClient;
@@ -126,6 +134,7 @@ void runActuatorForTest();
 void setup() {
   Serial.begin(115200);
   Serial.println("ESP32 is alive!");
+  dht.begin();
 
   wifiService.begin();
    pinMode(RESET_BUTTON_PIN, INPUT_PULLUP);
@@ -140,6 +149,7 @@ void setup() {
 
 
 void runActuatorForTest(){
+  Serial.println("runActuatorForTest");
 for(int i=0; i<2; i++){
   delay(1000);
   // Nothing to do here (we did it all in setup)
@@ -173,7 +183,30 @@ for(int i=0; i<2; i++){
 
 }
 
+void readAndLogDht() {
+  Serial.println("read dht");
+  if (millis() - lastDhtReadMs < DHT_READ_INTERVAL_MS) {
+    return;
+  }
+
+  lastDhtReadMs = millis();
+  float humidity = dht.readHumidity();
+  float temperatureC = dht.readTemperature();
+
+  if (isnan(humidity) || isnan(temperatureC)) {
+    Serial.println("[DHT22] Read failed");
+    return;
+  }
+
+  Serial.print("[DHT22] Temperature: ");
+  Serial.print(temperatureC, 1);
+  Serial.print(" C, Humidity: ");
+  Serial.print(humidity, 1);
+  Serial.println(" %");
+}
+
 void loop() {
+  Serial.println("loop");
   // put your main code here, to run repeatedly:
   delay(1000);
   //Serial.println("Tick");
@@ -191,7 +224,8 @@ void loop() {
     } else {
       buttonPressed = false;
     }
-  
+  readAndLogDht();
+    
   if (wifiService.isConnected()) {
       if (!client.connected()) {
           reconnect();
@@ -205,6 +239,8 @@ void loop() {
           client.publish("test/topic", "Hello from ESP32!");
       } */
   }
+
+
 
 }
 
